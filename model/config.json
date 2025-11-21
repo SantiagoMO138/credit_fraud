@@ -1,0 +1,77 @@
+{
+  "model_info": {
+    "type": "Autoencoder",
+    "framework": "PyTorch",
+    "version": "2.8.0+cu126",
+    "architecture": [
+      30,
+      20,
+      10,
+      5,
+      10,
+      20,
+      30
+    ],
+    "parameters": 1915,
+    "input_features": 30,
+    "scaling_method": "MinMaxScaler"
+  },
+  "performance_metrics": {
+    "roc_auc": 0.9598,
+    "f1_score": 0.4831,
+    "precision": 0.4587,
+    "recall": 0.5102,
+    "accuracy": 0.9981,
+    "true_positives": 50,
+    "false_positives": 59,
+    "true_negatives": 56805,
+    "false_negatives": 48
+  },
+  "threshold_config": {
+    "optimized_threshold": 0.013856054283678532,
+    "threshold_percentile": 99.9,
+    "original_threshold": 0.002963,
+    "improvement_metrics": {
+      "precision_improvement": "+1492.8%",
+      "f1_improvement": "+767.3%",
+      "false_positive_reduction": "-98.0%"
+    }
+  },
+  "business_impact": {
+    "daily_false_alarms": 29,
+    "alert_accuracy": "45.9% of alerts are real fraud",
+    "fraud_detection_rate": "51.0% of all frauds detected",
+    "false_alarm_reduction": "98.0% vs original threshold"
+  },
+  "deployment_strategies": {
+    "balanced": {
+      "description": "Recommended for production",
+      "threshold_percentile": 99.9,
+      "precision": 0.4587,
+      "recall": 0.5102,
+      "daily_alerts": 29
+    },
+    "conservative": {
+      "description": "For automatic alerts",
+      "threshold_percentile": 99.0,
+      "precision": 0.1199,
+      "recall": 0.8469,
+      "daily_alerts": 304
+    },
+    "aggressive": {
+      "description": "For investigation",
+      "threshold_percentile": 99.0,
+      "precision": 0.1199,
+      "recall": 0.8469,
+      "daily_alerts": 304
+    }
+  },
+  "training_info": {
+    "training_date": "20250906_142652",
+    "dataset_size": 284807,
+    "training_samples": 227845,
+    "normal_training_samples": 227451,
+    "test_samples": 56962,
+    "fraud_rate": 0.001729245759178389
+  }
+}
