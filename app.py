@@ -251,112 +251,70 @@ st.markdown("""
 
 @st.cache_resource
 def load_model_and_scaler():
-    """Carga el modelo y el scaler una sola vez"""
+    """Carga el modelo y el scaler una sola vez (SIN mensajes UI aquí)"""
     import json
-    
-    try:
-        st.info("🔄 Cargando configuración...")
-        
-        # Buscar archivos en el directorio model/
-        model_dir = Path('model')
-        if not model_dir.exists():
-            st.error("❌ No existe el directorio 'model/'")
-            st.stop()
-        
-        # Buscar archivo .pth
-        pth_files = list(model_dir.glob("*.pth"))
-        if not pth_files:
-            st.error("❌ No se encontró archivo .pth en model/")
-            st.stop()
-        
-        pth_file = pth_files[0]
-        st.info(f"📦 Usando modelo: {pth_file.name}")
-        
-        # Cargar checkpoint
-        checkpoint = torch.load(pth_file, 
-                               map_location='cpu',
-                               weights_only=False)
-        
-        st.info("✅ Checkpoint cargado")
-        
-        # Inicializar modelo
-        model = FraudAutoencoder()
-        model.load_state_dict(checkpoint['model_state_dict'])
-        model.eval()
-        
-        st.info("✅ Modelo inicializado")
-        
-        # Cargar scaler
-        scaler_file = model_dir / 'scaler.joblib'
-        if not scaler_file.exists():
-            st.error(f"❌ No existe {scaler_file}")
-            st.stop()
-            
-        scaler = joblib.load(scaler_file)
-        st.info("✅ Scaler cargado")
-        
-        # Obtener threshold (intentar desde checkpoint, luego config.json)
-        threshold = None
-        
-        if 'threshold' in checkpoint:
-            threshold = checkpoint['threshold']
-            st.info("📊 Threshold desde checkpoint")
-        else:
-            # Intentar leer de config.json
-            config_file = model_dir / 'config.json'
-            if config_file.exists():
-                with open(config_file, 'r') as f:
-                    config = json.load(f)
-                    if 'threshold_config' in config:
-                        threshold = config['threshold_config']['optimized_threshold']
-                        st.info("📊 Threshold desde config.json")
-                    elif 'threshold' in config:
-                        threshold = config['threshold']
-                        st.info("📊 Threshold desde config.json")
-        
-        if threshold is None:
-            st.error("❌ No se encontró threshold en checkpoint ni config.json")
-            st.stop()
-        
-        st.success(f"✅ Todo cargado | Threshold: {threshold:.6f}")
-        
-        return model, scaler, threshold
-        
-    except FileNotFoundError as e:
-        st.error(f"❌ Archivo no encontrado: {e}")
-        st.error("Estructura esperada:")
-        st.code("model/\n├── optimized_autoencoder.pth (o similar .pth)\n├── scaler.joblib\n└── config.json (opcional)")
-        st.stop()
-        
-    except KeyError as e:
-        st.error(f"❌ Error en estructura del checkpoint: {e}")
-        st.error("El archivo .pth no tiene 'model_state_dict'")
-        st.stop()
-        
-    except Exception as e:
-        st.error(f"❌ Error inesperado: {e}")
-        import traceback
-        st.code(traceback.format_exc())
-        st.stop()
+
+    # Buscar archivos en el directorio model/
+    model_dir = Path('model')
+    if not model_dir.exists():
+        raise FileNotFoundError("No existe el directorio 'model/'")
+
+    # Buscar archivo .pth
+    pth_files = list(model_dir.glob("*.pth"))
+    if not pth_files:
+        raise FileNotFoundError("No se encontró archivo .pth en model/")
+
+    pth_file = pth_files[0]
+
+    # Cargar checkpoint
+    checkpoint = torch.load(pth_file,
+                           map_location='cpu',
+                           weights_only=False)
+
+    # Inicializar modelo
+    model = FraudAutoencoder()
+    model.load_state_dict(checkpoint['model_state_dict'])
+    model.eval()
+
+    # Cargar scaler
+    scaler_file = model_dir / 'scaler.joblib'
+    if not scaler_file.exists():
+        raise FileNotFoundError(f"No existe {scaler_file}")
+
+    scaler = joblib.load(scaler_file)
+
+    # Obtener threshold (intentar desde checkpoint, luego config.json)
+    threshold = None
+
+    if 'threshold' in checkpoint:
+        threshold = checkpoint['threshold']
+    else:
+        # Intentar leer de config.json
+        config_file = model_dir / 'config.json'
+        if config_file.exists():
+            with open(config_file, 'r') as f:
+                config = json.load(f)
+                if 'threshold_config' in config:
+                    threshold = config['threshold_config']['optimized_threshold']
+                elif 'threshold' in config:
+                    threshold = config['threshold']
+
+    if threshold is None:
+        raise ValueError("No se encontró threshold en checkpoint ni config.json")
+
+    return model, scaler, threshold, pth_file.name
 
 @st.cache_data
 def load_transaction_data():
     """Carga datos de transacciones para simular el flujo"""
     try:
         # Priorizar archivo con variaciones si existe
-        if Path('creditcard_realistic.csv').exists():
-            st.info("🔄 Cargando datos con variaciones (stream)...")
-            df = pd.read_csv('creditcard_realistic.csv')
-            st.success(f"✅ Dataset stream cargado: {df.shape[0]:,} transacciones con variaciones")
+        if Path('creditcard_balanced_40pct.csv').exists():
+            df = pd.read_csv('creditcard_balanced_40pct.csv')
         elif Path('creditcard.csv').exists():
-            st.info("🔄 Cargando datos originales...")
             df = pd.read_csv('creditcard.csv')
-            st.success(f"✅ Dataset original cargado: {df.shape[0]:,} transacciones")
         else:
             raise FileNotFoundError("No se encontró creditcard.csv ni creditcard_realistic.csv")
-        
-        # Validar estructura del dataset
-        st.info(f"📋 Columnas en dataset: {len(df.columns)}")
         
         # Verificar columnas esenciales
         if 'Class' not in df.columns:
@@ -452,13 +410,12 @@ def initialize_charts(threshold):
             hovertemplate='<b>Transaction #%{x}</b><br>MSE Error: %{y:.6f}<br><extra></extra>'
         ))
 
-        # Configurar layout
+        # Configurar layout con rango ajustado al threshold
         fig_mse.update_layout(
             height=400,
             showlegend=False,
             xaxis_title="Transaction Sequence",
             yaxis_title="MSE Reconstruction Error",
-            yaxis_type="log",
             plot_bgcolor='rgba(15, 23, 42, 0.5)',
             paper_bgcolor='rgba(0, 0, 0, 0)',
             font=dict(color='#f1f5f9', family='Inter, sans-serif'),
@@ -469,6 +426,7 @@ def initialize_charts(threshold):
             yaxis=dict(
                 gridcolor='rgba(99, 102, 241, 0.1)',
                 zerolinecolor='rgba(99, 102, 241, 0.2)',
+                range=[0, threshold * 5]  # Rango dinámico basado en threshold
             ),
             hovermode='x unified',
             margin=dict(l=60, r=40, t=40, b=60)
@@ -582,13 +540,30 @@ def update_chart_data(history_list, threshold):
     st.session_state.fig_score.data[0].y = y_score
     st.session_state.fig_score.data[0].marker.color = colors
 
-def update_metrics_display(placeholder1, placeholder2, placeholder3, placeholder4, total_placeholder, threshold):
+def update_metrics_display(placeholder1, placeholder2, placeholder3, placeholder4, total_placeholder):
     """Actualiza SOLO el contenido de las métricas (sin recrear placeholders)"""
-    # Calcular métricas
+    # Calcular métricas básicas
     normal_pct = st.session_state.normal_count / max(st.session_state.total_processed, 1) * 100
     fraud_pct = st.session_state.fraud_count / max(st.session_state.total_processed, 1) * 100
-    avg_error = np.mean([t['error'] for t in st.session_state.transactions_history]) if st.session_state.transactions_history else 0
-    avg_score = np.mean([t['score'] for t in st.session_state.transactions_history]) if st.session_state.transactions_history else 0
+
+    # Calcular métricas de desempeño del modelo (TP, TN, FP, FN)
+    true_positives = sum(1 for t in st.session_state.transactions_history if t['predicted'] == 'FRAUDE' and t['actual'] == 'FRAUDE')
+    true_negatives = sum(1 for t in st.session_state.transactions_history if t['predicted'] == 'NORMAL' and t['actual'] == 'NORMAL')
+    false_positives = sum(1 for t in st.session_state.transactions_history if t['predicted'] == 'FRAUDE' and t['actual'] == 'NORMAL')
+    false_negatives = sum(1 for t in st.session_state.transactions_history if t['predicted'] == 'NORMAL' and t['actual'] == 'FRAUDE')
+
+    # Calcular accuracy
+    total = max(st.session_state.total_processed, 1)
+    accuracy = ((true_positives + true_negatives) / total) * 100 if total > 0 else 0
+
+    # Calcular precision
+    precision = (true_positives / (true_positives + false_positives)) * 100 if (true_positives + false_positives) > 0 else 0
+
+    # Calcular recall
+    recall = (true_positives / (true_positives + false_negatives)) * 100 if (true_positives + false_negatives) > 0 else 0
+
+    # Calcular F1-score
+    f1_score = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0
 
     # Actualizar métrica 1 - Normal Transactions
     placeholder1.markdown(f"""
@@ -630,7 +605,7 @@ def update_metrics_display(placeholder1, placeholder2, placeholder3, placeholder
     </div>
     """, unsafe_allow_html=True)
 
-    # Actualizar métrica 3 - Avg MSE Error
+    # Actualizar métrica 3 - Model Accuracy
     placeholder3.markdown(f"""
     <div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(79, 70, 229, 0.2) 100%);
                 border-radius: 16px;
@@ -638,19 +613,19 @@ def update_metrics_display(placeholder1, placeholder2, placeholder3, placeholder
                 border: 1px solid rgba(99, 102, 241, 0.2);
                 box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
         <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
-            <div style="font-size: 1.5rem; margin-right: 0.75rem;">📈</div>
-            <h3 style="margin: 0; color: #f1f5f9; font-size: 0.9rem; font-weight: 500;">Avg. MSE Error</h3>
+            <div style="font-size: 1.5rem; margin-right: 0.75rem;">🎯</div>
+            <h3 style="margin: 0; color: #f1f5f9; font-size: 0.9rem; font-weight: 500;">Model Accuracy</h3>
         </div>
         <p style="margin: 0; color: #6366f1; font-size: 2rem; font-weight: 700;">
-            {avg_error:.6f}
+            {accuracy:.2f}%
         </p>
         <p style="margin: 0.5rem 0 0 0; color: #a5b4fc; font-size: 0.85rem;">
-            Threshold: {threshold:.6f}
+            Precision: {precision:.2f}%
         </p>
     </div>
     """, unsafe_allow_html=True)
 
-    # Actualizar métrica 4 - Anomaly Score
+    # Actualizar métrica 4 - F1 Score & Recall
     placeholder4.markdown(f"""
     <div style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(124, 58, 237, 0.2) 100%);
                 border-radius: 16px;
@@ -659,13 +634,13 @@ def update_metrics_display(placeholder1, placeholder2, placeholder3, placeholder
                 box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
         <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
             <div style="font-size: 1.5rem; margin-right: 0.75rem;">⚡</div>
-            <h3 style="margin: 0; color: #f1f5f9; font-size: 0.9rem; font-weight: 500;">Anomaly Score</h3>
+            <h3 style="margin: 0; color: #f1f5f9; font-size: 0.9rem; font-weight: 500;">F1 Score</h3>
         </div>
         <p style="margin: 0; color: #8b5cf6; font-size: 2rem; font-weight: 700;">
-            {avg_score:.2f}
+            {f1_score:.2f}%
         </p>
         <p style="margin: 0.5rem 0 0 0; color: #c4b5fd; font-size: 0.85rem;">
-            Normalized average
+            Recall: {recall:.2f}%
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -693,7 +668,7 @@ def update_metrics_display(placeholder1, placeholder2, placeholder3, placeholder
 # ============================================================================
 
 if 'transactions_history' not in st.session_state:
-    st.session_state.transactions_history = deque(maxlen=100)
+    st.session_state.transactions_history = deque()  # Sin límite, guarda todo el historial
     st.session_state.fraud_count = 0
     st.session_state.normal_count = 0
     st.session_state.total_processed = 0
@@ -702,47 +677,55 @@ if 'transactions_history' not in st.session_state:
     st.session_state.fig_mse = None
     st.session_state.fig_score = None
     st.session_state.initialized_charts = False
+    st.session_state.speed = 5  # Velocidad por defecto
+    st.session_state.toasts_shown = False  # Control para mostrar toasts solo una vez
 
 # ============================================================================
 # INTERFAZ PRINCIPAL
 # ============================================================================
 
-# Header con logo y título
-col_logo, col_title = st.columns([1, 5])
-with col_logo:
-    st.markdown("# 🛡️")
-with col_title:
-    st.title("Fraud Detection System")
-    st.markdown("### Real-Time Transaction Monitoring & Analysis")
+# Header con título
+st.title("🛡️ Fraud Detection System")
+st.markdown("### Real-Time Transaction Monitoring & Analysis")
 
 st.markdown("---")
 
-# Cargar modelo y datos con debugging
+# Cargar modelo y datos con mensajes toast (solo primera vez)
 try:
-    with st.spinner("🔄 Initializing AI model and loading data..."):
-        autoencoder, scaler, threshold = load_model_and_scaler()
+    # Mostrar toasts solo en la primera carga
+    if not st.session_state.toasts_shown:
+        st.toast("Cargando configuración...")
+
+    with st.spinner("Initializing AI model and loading data..."):
+        autoencoder, scaler, threshold, model_name = load_model_and_scaler()
+
+        # Mostrar toasts solo en la primera carga
+        if not st.session_state.toasts_shown:
+            st.toast(f"Modelo: {model_name}")
+            st.toast("Checkpoint cargado")
+            st.toast("Modelo inicializado")
+            st.toast("Scaler cargado")
+
         df_transactions = load_transaction_data()
 
         # Definir feature_cols (todas las columnas excepto Class)
         feature_cols = [col for col in df_transactions.columns if col != 'Class'][:30]
 
-    # Información del sistema en un banner elegante
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
-                border-radius: 12px;
-                padding: 1rem;
-                border-left: 4px solid #6366f1;
-                margin-bottom: 2rem;">
-        <p style="margin: 0; color: #94a3b8; font-size: 0.9rem;">
-            <strong style="color: #f1f5f9;">🤖 System Status:</strong> Online |
-            <strong style="color: #f1f5f9;">🎯 Threshold:</strong> {threshold:.6f} |
-            <strong style="color: #f1f5f9;">📊 Dataset:</strong> {len(df_transactions):,} transactions loaded
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Toast final solo en la primera carga
+    if not st.session_state.toasts_shown:
+        st.toast(f"Sistema listo | Threshold: {threshold:.6f}")
+        st.session_state.toasts_shown = True  # Marcar como mostrado
 
+except FileNotFoundError as e:
+    st.error(f"Archivo no encontrado: {e}")
+    st.error("Estructura esperada:")
+    st.code("model/\n├── optimized_autoencoder.pth (o similar .pth)\n├── scaler.joblib\n└── config.json (opcional)")
+    st.stop()
+except ValueError as e:
+    st.error(f"Error de configuración: {e}")
+    st.stop()
 except Exception as e:
-    st.error(f"❌ Critical Error: {e}")
+    st.error(f"Critical Error: {e}")
     import traceback
     st.code(traceback.format_exc())
     st.stop()
@@ -752,14 +735,14 @@ except Exception as e:
 # ============================================================================
 
 with st.sidebar:
-    st.markdown("## ⚙️ Control Panel")
+    st.markdown("## Control Panel")
     st.markdown("---")
 
     # Controles principales
-    st.markdown("### 🎮 Stream Controls")
+    st.markdown("### Stream Controls")
 
     # Botón de inicio/pausa
-    btn_text = "▶️ Start Stream" if not st.session_state.streaming else "⏸️ Pause Stream"
+    btn_text = "Start Stream" if not st.session_state.streaming else "Pause Stream"
     btn_type = "primary" if not st.session_state.streaming else "secondary"
 
     if st.button(btn_text, use_container_width=True, type=btn_type):
@@ -767,7 +750,7 @@ with st.sidebar:
         st.rerun()
 
     # Botón de reset
-    if st.button("🔄 Reset All Data", use_container_width=True):
+    if st.button("Reset All Data", use_container_width=True):
         st.session_state.transactions_history.clear()
         st.session_state.fraud_count = 0
         st.session_state.normal_count = 0
@@ -778,14 +761,15 @@ with st.sidebar:
     st.markdown("---")
 
     # Configuración de velocidad
-    st.markdown("### ⚡ Speed Configuration")
+    st.markdown("### Speed Configuration")
     speed = st.slider(
         "Transactions per second",
         min_value=1,
         max_value=20,
-        value=5,
+        value=st.session_state.speed,  # Usar valor guardado en session_state
         help="Control the speed of transaction processing"
     )
+    st.session_state.speed = speed  # Guardar valor actualizado
     delay = 1.0 / speed
 
     st.markdown(f"""
@@ -803,7 +787,7 @@ with st.sidebar:
     st.markdown("---")
 
     # Información del modelo
-    st.markdown("### 🤖 Model Information")
+    st.markdown("### Model Information")
     st.markdown(f"""
     <div style="background: rgba(30, 41, 59, 0.5);
                 border-radius: 8px;
@@ -830,7 +814,7 @@ with st.sidebar:
     st.markdown("---")
 
     # Estado del sistema
-    st.markdown("### 📊 System Status")
+    st.markdown("### System Status")
     status_color = "#10b981" if st.session_state.streaming else "#6b7280"
     status_text = "Streaming" if st.session_state.streaming else "Paused"
 
@@ -857,7 +841,7 @@ st.markdown("---")
 # MÉTRICAS EN TIEMPO REAL - DISEÑO MEJORADO
 # ============================================================================
 
-st.markdown("## 📊 Real-Time Metrics Dashboard")
+st.markdown("## Real-Time Metrics Dashboard")
 
 # Crear columnas para métricas
 metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
@@ -879,7 +863,7 @@ st.markdown("---")
 # VISUALIZACIÓN EN TIEMPO REAL - DISEÑO MEJORADO
 # ============================================================================
 
-st.markdown("## 📈 Live Analytics & Monitoring")
+st.markdown("## Live Analytics & Monitoring")
 
 # Crear contenedores persistentes para evitar parpadeo
 col_chart1, col_chart2 = st.columns(2)
@@ -995,35 +979,49 @@ if st.session_state.streaming:
         # Obtener historial para actualizar visualizaciones
         history_list = list(st.session_state.transactions_history)
 
-        # ACTUALIZAR MÉTRICAS SIN RECREAR (SIN PARPADEO)
-        update_metrics_display(metric_placeholder1, metric_placeholder2, metric_placeholder3, metric_placeholder4, total_processed_placeholder, threshold)
+        # ACTUALIZAR SOLO MÉTRICAS DURANTE EL STREAMING
+        update_metrics_display(metric_placeholder1, metric_placeholder2, metric_placeholder3, metric_placeholder4, total_processed_placeholder)
 
-        # ACTUALIZAR GRÁFICOS SIN RECREAR (SIN PARPADEO)
-        if history_list:
-            # Actualizar solo los datos de las figuras existentes
-            update_chart_data(history_list, threshold)
+        # Mostrar mensaje de streaming activo (sin gráficas pesadas)
+        if st.session_state.total_processed == 1:  # Solo la primera vez
+            chart_mse_placeholder.markdown("""
+            <div style="background: rgba(99, 102, 241, 0.1);
+                        border-radius: 12px;
+                        padding: 3rem;
+                        text-align: center;
+                        border: 2px dashed rgba(99, 102, 241, 0.3);">
+                <h3 style="color: #f1f5f9; margin-bottom: 0.5rem;">Streaming Active</h3>
+                <p style="color: #94a3b8; font-size: 0.9rem;">
+                    Charts will be generated when you pause the stream
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
 
-            # Renderizar las figuras desde session_state (ya actualizadas)
-            chart_mse_placeholder.plotly_chart(st.session_state.fig_mse, use_container_width=True)
-            chart_score_placeholder.plotly_chart(st.session_state.fig_score, use_container_width=True)
+            chart_score_placeholder.markdown("""
+            <div style="background: rgba(139, 92, 246, 0.1);
+                        border-radius: 12px;
+                        padding: 3rem;
+                        text-align: center;
+                        border: 2px dashed rgba(139, 92, 246, 0.3);">
+                <h3 style="color: #f1f5f9; margin-bottom: 0.5rem;">Processing...</h3>
+                <p style="color: #94a3b8; font-size: 0.9rem;">
+                    Metrics updating in real-time
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
 
-            # Tabla de últimas transacciones con diseño mejorado
-            recent_df = pd.DataFrame(history_list[-20:])
-
-            # Aplicar estilos profesionales
-            def highlight_fraud(row):
-                if row['predicted'] == 'FRAUDE':
-                    return ['background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.2) 100%); color: #fca5a5; font-weight: 500;'] * len(row)
-                else:
-                    return ['background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.2) 100%); color: #86efac; font-weight: 500;'] * len(row)
-
-            styled_df = recent_df.style.apply(highlight_fraud, axis=1)
-
-            table_placeholder.dataframe(
-                styled_df,
-                use_container_width=True,
-                height=400
-            )
+            table_placeholder.markdown("""
+            <div style="background: rgba(245, 158, 11, 0.1);
+                        border-radius: 12px;
+                        padding: 2rem;
+                        text-align: center;
+                        border: 2px dashed rgba(245, 158, 11, 0.3);">
+                <h3 style="color: #f1f5f9; margin-bottom: 0.5rem;">Transaction History</h3>
+                <p style="color: #94a3b8; font-size: 0.9rem;">
+                    Table will appear when you pause
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
 
         # Esperar antes de la siguiente transacción
         time.sleep(delay)
@@ -1033,22 +1031,22 @@ if st.session_state.streaming:
         st.session_state.streaming = False
 
 else:
-    # Mostrar última información si está pausado (SIN PARPADEO)
+    # Mostrar última información si está pausado (GENERAR GRÁFICAS AQUÍ)
     if st.session_state.transactions_history:
         history_list = list(st.session_state.transactions_history)
 
         # Actualizar métricas (sin recrear)
-        update_metrics_display(metric_placeholder1, metric_placeholder2, metric_placeholder3, metric_placeholder4, total_processed_placeholder, threshold)
+        update_metrics_display(metric_placeholder1, metric_placeholder2, metric_placeholder3, metric_placeholder4, total_processed_placeholder)
 
-        # Actualizar datos de las figuras existentes (sin recrear)
+        # GENERAR GRÁFICAS AL PAUSAR
         update_chart_data(history_list, threshold)
 
-        # Renderizar las figuras desde session_state
+        # Renderizar las figuras completas
         chart_mse_placeholder.plotly_chart(st.session_state.fig_mse, use_container_width=True)
         chart_score_placeholder.plotly_chart(st.session_state.fig_score, use_container_width=True)
 
-        # Tabla con diseño mejorado
-        recent_df = pd.DataFrame(history_list[-20:])
+        # Tabla con diseño mejorado - MOSTRAR TODAS LAS TRANSACCIONES
+        recent_df = pd.DataFrame(history_list)
 
         def highlight_fraud(row):
             if row['predicted'] == 'FRAUDE':
@@ -1057,8 +1055,10 @@ else:
                 return ['background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.2) 100%); color: #86efac; font-weight: 500;'] * len(row)
 
         styled_df = recent_df.style.apply(highlight_fraud, axis=1)
-        table_placeholder.dataframe(styled_df, use_container_width=True, height=400)
+        table_placeholder.dataframe(styled_df, use_container_width=True, height=600)
     else:
+        # Actualizar métricas iniciales (todo en cero)
+        update_metrics_display(metric_placeholder1, metric_placeholder2, metric_placeholder3, metric_placeholder4, total_processed_placeholder)
         # Mensaje de bienvenida mejorado
         st.markdown("""
         <div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
@@ -1067,7 +1067,6 @@ else:
                     text-align: center;
                     border: 2px dashed rgba(99, 102, 241, 0.3);
                     margin: 3rem 0;">
-            <div style="font-size: 4rem; margin-bottom: 1rem;">🚀</div>
             <h2 style="color: #f1f5f9; margin-bottom: 1rem;">Ready to Start Monitoring</h2>
             <p style="color: #94a3b8; font-size: 1.1rem; margin-bottom: 2rem;">
                 Click <strong style="color: #6366f1;">"Start Stream"</strong> in the sidebar to begin real-time fraud detection
@@ -1082,7 +1081,7 @@ else:
                     <p style="color: #94a3b8; font-size: 0.9rem; margin-top: 0.5rem;">Dataset Ready</p>
                 </div>
                 <div style="text-align: center;">
-                    <div style="font-size: 2rem; color: #6366f1;">⏸️</div>
+                    <div style="font-size: 2rem; color: #6366f1;">―</div>
                     <p style="color: #94a3b8; font-size: 0.9rem; margin-top: 0.5rem;">Awaiting Start</p>
                 </div>
             </div>
