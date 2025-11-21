@@ -4,24 +4,24 @@
 # ============================================================================
 
 # PyTorch (versión Colab estándar)
-torch>=2.0.0,<2.5.0
+torch<2.5.0
 torchvision>=0.15.0
 
 # Data Science Core
-pandas>=1.5.0,<3.0.0
-numpy>=1.23.0,<2.0.0
-scikit-learn>=1.2.0,<1.6.0
+pandas<3.0.0
+numpy<2.0.0
+scikit-learn<1.6.0
 
 # Visualización
-matplotlib>=3.7.0,<4.0.0
-seaborn>=0.12.0,<0.14.0
-plotly>=5.14.0,<6.0.0
+matplotlib<4.0.0
+seaborn<0.14.0
+plotly<6.0.0
 
 # Streamlit
-streamlit>=1.28.0,<2.0.0
+streamlit<2.0.0
 
 # Utilidades
-joblib>=1.3.0,<2.0.0
+joblib<2.0.0
 
 # Opcional pero recomendado para mejor performance
 watchdog>=3.0.0  # Para auto-reload de Streamlit
